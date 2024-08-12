@@ -1,0 +1,97 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader("UTF-8") { reader ->
+        localProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty("flutter.versionCode")
+
+if (flutterVersionCode == null) {
+    flutterVersionCode = "1"
+}
+
+def flutterVersionName = localProperties.getProperty("flutter.versionName")
+if (flutterVersionName == null) {
+    flutterVersionName = "1.0"
+}
+def useGoogleServices = true
+def appName = 'Bitboy wallet'
+def appDefaultId = 'com.bitboy.wallet'
+def configureFlavor = { flavor,
+                        appIdSuffix = '',
+                        appPrefix = '',
+                        abiFilters = ['arm64-v8a', 'armeabi-v7a'] ->
+    flavor.dimension 'env'
+    flavor.applicationId System.env.APP_IDENTIFIER ?: "${appDefaultId}${appIdSuffix}"
+    flavor.resValue 'string', 'app_name', "${appPrefix}${appName}"
+    flavor.ndk.abiFilters = abiFilters
+}
+
+android {
+    namespace = "io.pixelplex.bitboy.bitboy"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    defaultConfig {
+        applicationId = "io.pixelplex.bitboy.bitboy"
+        // You can update the following values to match your application needs.
+        // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
+        minSdk = 23
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutterVersionCode.toInteger()
+        versionName = flutterVersionName
+    }
+
+    buildTypes {
+        release {
+            // TODO: Add your own signing config for the release build.
+            // Signing with the debug keys for now, so `flutter run --release` works.
+            signingConfig = signingConfigs.debug
+        }
+    }
+
+    //Flavors
+    flavorDimensions 'env'
+
+    productFlavors {
+        dev {
+            configureFlavor(it, '.dev', '[DEV] ', ['arm64-v8a', 'x86_64'])
+        }
+
+        stage {
+            configureFlavor(it, '.stage', '[QA] ', ['arm64-v8a'])
+        }
+
+        prod {
+            configureFlavor(it, '.prod')
+        }
+
+        dev_test {
+            useGoogleServices = false
+            configureFlavor(it, '.dev_test', '[TEST] ', ['arm64-v8a'])
+        }
+    }
+}
+
+
+flutter {
+    source = "../.."
+}

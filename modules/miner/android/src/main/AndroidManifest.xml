@@ -1,0 +1,27 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="io.bitboy.mobile.miner_launcher">
+    <uses-permission android:name="com.example.permission.SEND_STATS" />
+    <uses-permission android:name="android.permission.SEND_BROADCAST" />
+    <permission android:name="com.example.yourapp.permission.RECEIVE_BROADCAST"
+        android:protectionLevel="normal" />
+    <permission
+        android:name="owner.custom.permission"
+        android:protectionLevel="signatureOrSystem">
+    </permission>
+    <uses-permission android:name="owner.custom.permission" />
+    <application>
+        <service
+            android:name=".services.stats.StatsService"
+            android:allowBackup="false"
+            android:usesCleartextTraffic="false" />
+
+        <receiver
+            android:name=".services.stats.StatsBroadcastReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="io.bitboy.stats_sender" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

@@ -1,0 +1,12 @@
+[submodule "modules/data/submodule/flutter_trust_wallet_core"]
+	path = modules/data/submodule/flutter_trust_wallet_core
+	url = https://github.com/vm-px/flutter_trust_wallet_core.git
+[submodule "modules/wallet/submodules/flutter_trust_wallet_core"]
+	path = modules/wallet/submodules/flutter_trust_wallet_core
+	url = https://github.com/pixelplex/flutter_trust_wallet_core.git
+[submodule "modules/submodules/flutter_trust_wallet_core"]
+	path = modules/submodules/flutter_trust_wallet_core
+	url = https://github.com/pixelplex/flutter_trust_wallet_core.git
+[submodule "modules/data/submodules/flutter_trust_wallet_core"]
+	path = modules/data/submodules/flutter_trust_wallet_core
+	url = https://github.com/pixelplex/flutter_trust_wallet_core.git
