@@ -1,0 +1,113 @@
+---
+
+variables:
+  MANUAL_DELIVERY_CODE_TO_CUSTOMER:
+    value: "false"
+    description: 'Установить в true для ручной доставки кода в репозиторий заказчика. По умолчанию: false'
+  AUTO_DELIVERY_CODE_TO_CUSTOMER:
+    value: "false" 
+    description: 'Установить в true для автоматической доставки кода в репозиторий заказчика. Срабатывает при коммите в ветку $FROM_BRANCH По умолчанию: false'  
+  SOURCE_REPOSITORY:
+    description: "Ссылка на SSH-эндпоинт репозитория c кодом. По умолчанию: git@${CI_SERVER_HOST}:${CI_PROJECT_PATH}.git"
+  TARGET_REPOSITORY: 
+    description: "Ссылка на SSH-эндпоинт заказчика"
+  RELEASE_NAME: 
+    description: "Название текущего релиза. По умолчанию: release_<время в формате yyyymmdd>"
+  FROM_BRANCH:
+    value: "master"
+    description: 'код из какой ветки будет доставлен в репозиторий заказчика. По умолчанию: master'   
+  TO_BRANCH:
+    description: "Ветка куда будет доставлен код в репозиторий заказчика. Если не установлено, то значение выбирается из переменной $RELEASE_NAME"
+
+
+stages:
+  - make_release
+  - push_commit
+
+.common: 
+  image: registry-gitlab.pixelplexlabs.com/service/devops-projects/private-registry/git-code-delivery:master-new
+  tags:
+    - docker
+  variables:
+    GIT_SSH_COMMAND: "ssh -o StrictHostKeyChecking=no"
+  before_script: 
+    - SRC_PROJECT_PATH=$(echo "$SOURCE_REPOSITORY" | sed -E 's|.+:([^/]+/[^/]+)\.git$|\1|') # 832-bitboy/832-bitboy-mobile-mining
+    - SRC_PROJECT_NAME=$(echo "$SRC_PROJECT_PATH" | sed 's#.*/##') # 832-bitboy-mobile-mining
+    # проверка существования переменных + git clone
+    - if [[ -z "$TARGET_REPOSITORY" ]]; then echo "variable TARGET_REPOSITORY does not exist" && exit 1; fi
+    - if [[ -z "$RELEASE_NAME" ]]; then export RELEASE_NAME=release_$(date +'%Y%m%d'); fi
+    - if [[ -z "$TO_BRANCH" ]]; then export TO_BRANCH="$RELEASE_NAME"; fi
+    - |
+      if [[ -z "$SOURCE_REPOSITORY" ]]; 
+      then echo -e "git clone git@${CI_SERVER_HOST}:${CI_PROJECT_PATH}.git\n Workdir: $CI_PROJECT_NAME";
+      git clone git@${CI_SERVER_HOST}:${CI_PROJECT_PATH}.git; 
+      cd $CI_PROJECT_NAME;
+      else echo -e "git clone ${SOURCE_REPOSITORY}\n Workdir: $SRC_PROJECT_NAME";
+      git clone ${SOURCE_REPOSITORY}; 
+      cd $SRC_PROJECT_NAME; fi;
+    - git fetch --all  
+  after_script: 
+    - cd ../; rm -rf $CI_PROJECT_NAME # удаление директории с проектом в самом конце
+  rules:
+    - if: $MANUAL_DELIVERY_CODE_TO_CUSTOMER == "true"
+      when: manual
+    - if: '$AUTO_DELIVERY_CODE_TO_CUSTOMER == "true"'
+      when: on_success
+    - when: never
+
+make_release: 
+  stage: make_release
+  extends:
+   - .common
+  script:
+    # создание отдельной ветки для переписи истории и сквоша коммитов
+    - git checkout $FROM_BRANCH; git checkout -b pixel_release;    
+    # перепись всех коммитов юзером pixelplex
+    - |
+      git filter-branch -f --env-filter "
+      GIT_AUTHOR_NAME='PixelPlex'
+      GIT_AUTHOR_EMAIL='dev@pixelplex.io'
+      GIT_COMMITTER_NAME='PixelPlex'
+      GIT_COMMITTER_EMAIL='dev@pixelplex.io'
+      " --commit-filter 'git commit-tree "$@";' --
+    # сквош всех коммитов в 1 коммит
+    - FIRST_COMMIT="$(git rev-list --max-parents=0 HEAD)"
+    - git reset --soft "$FIRST_COMMIT"; 
+    - git add .
+    - git commit --amend --date="now" -m "$RELEASE_NAME"
+    # получение хэша полученного при сквоше коммита 
+    - CURRENT_COMMIT="$(git rev-parse HEAD)"
+    #проверка условий и действия
+    # Если $TO_BRANCH не существует, из ветки pixel_release создаем ветку $TO_BRANCH
+    # Если $TO_BRANCH существует, сверяем его последний коммит с $CURRENT_COMMIT
+      # Если они разные, то осуществляем cherry-pick $CURRENT_COMMIT в ветку $TO_BRANCH
+      # Если одинаковые, то действие пропускается, выводится предупреждающее сообщение
+    # В итоге производится push ветки $TO_BRANCH в наш gitlab 
+    - | 
+      if git show-ref refs/remotes/origin/$TO_BRANCH;
+      then echo "git checkout origin/$TO_BRANCH"; 
+      git checkout origin/$TO_BRANCH; 
+      HEAD_COMMIT="$(git rev-parse HEAD)";
+      DIFF_OUTPUT=$(git diff $CURRENT_COMMIT $HEAD_COMMIT);
+        if [[ -n "$DIFF_OUTPUT" ]];  
+        then echo "git cherry-pick --strategy=recursive -X theirs $CURRENT_COMMIT";
+        git cherry-pick --strategy=recursive -X theirs $CURRENT_COMMIT;
+        echo "git checkout -b $TO_BRANCH; git push origin $TO_BRANCH";
+        git checkout -b $TO_BRANCH; git push origin $TO_BRANCH;
+        else echo "Branch $TO_BRANCH is already cherry-picked with commit $CURRENT_COMMIT"; fi;
+      else echo "git checkout -b $TO_BRANCH; git push origin $TO_BRANCH";
+      git checkout -b $TO_BRANCH; git push origin $TO_BRANCH; fi;
+
+push_commit:
+  stage: push_commit
+  extends:
+   - .common
+  needs:
+    - make_release
+  script:
+    - git checkout $TO_BRANCH # выбор ветки, которую доставляем заказчику
+    - git remote add external ${TARGET_REPOSITORY} # добавление репозитория заказчика в git remote -v 
+    - git fetch --all # fetch веток в локальный репозиторий
+    - git push external ${TO_BRANCH} # доставка кода в репозиторий заказчика
+
+
